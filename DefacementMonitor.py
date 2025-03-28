@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, send_from_directory, jsonify
 from flask_apscheduler import APScheduler
 import requests
 from bs4 import BeautifulSoup
@@ -37,12 +37,12 @@ config_file = 'config.json'
 last_checks_file = 'last_checks.json'
 backup_file='backup.json'
 html_code=''
-
+default_interval=10
 
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
-app.config['MAIL_USERNAME'] = 'defacemonitor@gmail.com'  # Use your actual Gmail address
-app.config['MAIL_PASSWORD'] = 'vqugmqtomfqgpyoz'     # Use your generated App Password
+app.config['MAIL_USERNAME'] = 'anh.trantnma2004@hcmut.edu.vn'  # Use your actual Gmail address
+app.config['MAIL_PASSWORD'] = 'dgsf xwfl pvlr ldaf'
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
 mail = Mail(app)
@@ -51,13 +51,15 @@ def send_pushover_notification(url, report_filename, screenshot_filename):
     with app.app_context():
         msg = Message(
             subject='Deface Monitored!', 
-            sender='defacemonitor@gmail.com',  # Ensure this matches MAIL_USERNAME
-            recipients=PUSHOVER_USER_MAIL  # Replace with actual recipient's email
+            sender='anh.trantnma2004@hcmut.edu.vn',  # Ensure this matches MAIL_USERNAME
+            recipients=[PUSHOVER_USER_MAIL]  # Replace with actual recipient's email
         )
         msg.body = f"Changes detected on {url}. Report: {report_filename}, Screenshot: {screenshot_filename}"
         
         with app.open_resource(f"{report_filename}") as fp:
             msg.attach(f"{report_filename}", "text/plain", fp.read())
+        with app.open_resource(f"{os.path.join('screenshots',screenshot_filename)}") as fp:
+            msg.attach(f"{os.path.join('screenshots',screenshot_filename)}","image/png",fp.read())
 
         mail.send(msg)
         return "Message sent!"
@@ -191,10 +193,11 @@ def check_for_changes(Id):
         with open(report_filename, "a") as f:
             f.write(f"\nCheck performed for {url} at {current_time}\n")
             if new_hash != previous_hashes[url]:
-                changes = get_detailed_changes(previous_contents[url], new_content)
                 f.write("Changes detected:\n")
+                changes=get_detailed_changes(previous_contents[url],new_content)
                 f.write(changes)
                 f.write("\n")
+                send_pushover_notification(url, report_filename, screenshot_filename)
             else:
                 f.write("No significant changes detected.\n\n")
         print("OK")
@@ -217,12 +220,13 @@ def setup_dynamic(url):
 
 
 def load_config():
-    global PUSHOVER_USER_MAIL, urls, custom_message, ignore_patterns,url
+    global PUSHOVER_USER_MAIL, urls, custom_message,url,default_interval
     if os.path.exists(config_file):
         with open(config_file, 'r') as file:
             config = json.load(file)
             PUSHOVER_USER_MAIL = config.get('user_mail', '')
             urls = config.get('url', [])
+            default_interval=config.get('default_int',10)
     for e in urls:
         edict=service.add_url(e,0)
         setup_dynamic(edict)
@@ -231,6 +235,7 @@ def save_config():
     config = {
         'user_mail': PUSHOVER_USER_MAIL,
         'url': urls,
+        'default_int':default_interval,
     }
     with open(config_file, 'w') as file:
         json.dump(config, file)
@@ -291,7 +296,7 @@ def load_log():
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    global PUSHOVER_USER_MAIL, urls, custom_message, ignore_patterns
+    global PUSHOVER_USER_MAIL, urls, custom_message
     
     if request.method == 'POST':
         for url in request.form['url'].split(','):
@@ -306,7 +311,7 @@ def index():
         for url_ in service.get_urls():
             urls.append(url_["URL"])
         PUSHOVER_USER_MAIL = request.form['user_mail']
-        ignore_patterns = request.form.getlist('ignore_patterns')
+
 
         
         if 'save_config' in request.form:
@@ -321,7 +326,7 @@ def index():
     return render_template('index.html',
                            user_mail = PUSHOVER_USER_MAIL,
                            url=URL,
-                           ignore_patterns=ignore_patterns)
+                           )
 
 
 
@@ -330,11 +335,19 @@ def index():
 def start_monitoring(id):
     interval = int(request.form['interval'])
     schedule = request.form['schedule']
-    
-    if schedule:
-        scheduler.add_job(id = id , args=[id], func=check_for_changes, trigger='cron', **cron_to_dict(schedule))
+
+    if scheduler.get_job(id) is not None:
+        if schedule:
+            scheduler.remove_job(id=id)
+            scheduler.add_job(id=id, args=[id], func=check_for_changes, trigger='cron', **cron_to_dict(schedule),next_run_time=datetime.now())
+        else:
+            scheduler.remove_job(id=id)
+            scheduler.add_job(id=id, args=[id], func=check_for_changes, trigger='interval', minutes=interval,next_run_time=datetime.now())
     else:
-        scheduler.add_job(id = id ,args=[id], func=check_for_changes, trigger='interval', minutes=interval)
+        if schedule:
+            scheduler.add_job(id = id , args=[id], func=check_for_changes, trigger='cron', **cron_to_dict(schedule),next_run_time=datetime.now())
+        else:
+            scheduler.add_job(id = id ,args=[id], func=check_for_changes, trigger='interval', minutes=interval,next_run_time=datetime.now())
     
     # Run the job once immediately
     # scheduler.add_job(id = id , func=check_for_changes, trigger='date', run_date=datetime.now())
@@ -352,9 +365,9 @@ def start_all():
     schedule = request.form['schedule']
     for url_ in service.get_urls():
         if schedule:
-            scheduler.add_job(id=url_["Id"],  args=[url_["Id"]], func=check_for_changes, trigger='cron', **cron_to_dict(schedule))
+            scheduler.add_job(id=url_["Id"],  args=[url_["Id"]], func=check_for_changes, trigger='cron', **cron_to_dict(schedule),next_run_time=datetime.now())
         else:
-            scheduler.add_job(id=url_["Id"],  args=[url_["Id"]], func=check_for_changes, trigger='interval', minutes=interval)
+            scheduler.add_job(id=url_["Id"],  args=[url_["Id"]], func=check_for_changes, trigger='interval', minutes=interval,next_run_time=datetime.now())
 
     # Run the job once immediately
     # scheduler.add_job(id = id , func=check_for_changes, trigger='date', run_date=datetime.now())
@@ -413,8 +426,10 @@ def config_html(id):
     return render_template('dynamic.html', content_url=html_code,id=id)
 
 
-@app.route('/save_config', methods=['POST'])
-def save_config():
+
+
+@app.route('/save_dynamic', methods=['POST'])
+def save_dynamic():
     global html_code
     id=request.form['id']
     url = service.get_url(id)
@@ -476,6 +491,27 @@ def download_report(url):
             f.write(f"Current monitoring status: {'Active' if scheduler.get_job('MonitorJob') else 'Inactive'}\n")
     
     return send_file(report_path, as_attachment=True)
+
+
+@app.route('/api/<path:url>')
+def api_caller(url):
+    global urls,default_interval
+    answer = {}
+    url_=service.get_url_by_name(url)
+    if url_ is not None:
+        check_for_changes(url_['Id'])
+        answer['result']='Checked'
+    else:
+        urls.append(url)
+        url_=service.add_url(url,1)
+        interval = default_interval
+        scheduler.add_job(id=url_['Id'], args=[url_['Id']], func=check_for_changes, trigger='interval', minutes=interval,
+                                  next_run_time=datetime.now())
+        answer['result'] = 'Added'
+    answer['status']=200
+    answer['mimetype']='application/json'
+    return jsonify(answer)
+
 
 @app.route('/clearsave/<string:id>')
 def clear(id):
