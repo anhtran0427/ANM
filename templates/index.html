@@ -58,22 +58,7 @@
     <div class="container">
       <h1 class="mb-4">Defacement Monitor</h1>
       <!-- Help Icon and Text for Pushover Key and API Token -->
-      <i
-        class="fas fa-question-circle help-icon top-right-icon"
-        onclick="toggleHelpText('pushoverHelpText', this)"
-      ></i>
-      <div class="help-text" id="pushoverHelpText">
-        <p>
-          To Use: Create a FREE account on
-          <a href="https://pushover.net" target="_blank">Pushover</a>, then log
-          in and you will see "Your User Key" in the top right corner of your
-          dashboard. To get an API Token, scroll down to the bottom of your
-          Pushover dashboard, in "Your Applications" click on "Create an
-          Application/API Token", give it a name a click on "Create
-          Application", then you'll see your API Token right under "API
-          Token/Key"!
-        </p>
-      </div>
+
 
       {% with messages = get_flashed_messages(with_categories=true) %} {% if
       messages %} {% for category, message in messages %}
