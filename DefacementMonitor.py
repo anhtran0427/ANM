@@ -28,7 +28,6 @@ PUSHOVER_USER_MAIL = ''
 urls=[]
 url = {}
 custom_message = ''
-ignore_patterns = []
 previous_hashes = {}
 previous_contents = {}
 previous_screenshots = {}
@@ -36,6 +35,7 @@ previous_domtree={}
 last_checks = {}
 config_file = 'config.json'
 last_checks_file = 'last_checks.json'
+backup_file='backup.json'
 html_code=''
 
 
@@ -237,13 +237,11 @@ def save_config():
     config = {
         'user_mail': PUSHOVER_USER_MAIL,
         'url': urls,
-        'ignore_patterns': ignore_patterns,
     }
     with open(config_file, 'w') as file:
         json.dump(config, file)
 
 def save_htmlfiles(url):
-    url = service.get_url(id)
     url_literal = url["URL"]
     filename = f"{re.sub('[^a-zA-Z0-9_]', '_', url_literal)}.html"
     report_path = os.path.join('htmlfiles', filename)
@@ -277,6 +275,24 @@ def clear_by_name(URL):
     if URL in previous_screenshots:
         del previous_screenshots[URL]
     service.clear_url_by_name(URL)
+
+def log_dump():
+    global previous_hashes,previous_contents
+    backup = {
+        'hash': previous_hashes,
+        'content': previous_contents,
+    }
+    with open(backup_file, 'w') as file:
+        json.dump(backup, file)
+
+def load_log():
+    global previous_hashes,previous_contents
+    if os.path.exists(backup_file):
+        with open(backup_file, 'r') as file:
+            backup = json.load(file)
+            previous_hashes=backup.get('hash',{})
+            previous_contents=backup.get('content',{})
+
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -519,6 +535,8 @@ def cron_to_dict(cron_string):
 if __name__ == '__main__':
     load_config()
     load_last_checks()
+    load_log()
+    scheduler.add_job(id='LOGDUMP',func=log_dump, trigger='interval', minutes=10)
     if not os.path.exists('reports'):
         os.makedirs('reports')
     if not os.path.exists('screenshots'):
