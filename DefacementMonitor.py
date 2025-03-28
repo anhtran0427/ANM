@@ -90,13 +90,7 @@ def compare_screenshots(old_screenshot, new_screenshot):
     diff = ImageChops.difference(old_screenshot, new_screenshot)
     return diff.getbbox() is not None
 
-def is_significant_change(old_content, new_content):
-    for pattern in ignore_patterns:
-        if pattern in old_content or pattern in new_content:
-            return False
-    diff_ratio = difflib.SequenceMatcher(None, old_content, new_content).ratio()
-    print("diff", diff_ratio)
-    return (1 - diff_ratio) > change_threshold
+
 
 def load_last_checks():
     global last_checks
