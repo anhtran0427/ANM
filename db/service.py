@@ -54,3 +54,10 @@ def clear_url_by_name(URL):
         break
     if urls[ind]['URL'] == URL:
       urls.pop(ind)
+
+def get_url_by_name(URL):
+    global urls
+    for url in urls:
+        if url['URL'] == URL:
+            return url
+    return None
