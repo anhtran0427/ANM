@@ -583,7 +583,7 @@ if __name__ == '__main__':
     load_config()
     load_last_checks()
     load_log()
-    scheduler.add_job(id='LOGDUMP',func=log_dump, trigger='interval', minutes=10)
+    scheduler.add_job(id='LOGDUMP',func=log_dump, trigger='interval', minutes=10,next_run_time=datetime.now())
     if not os.path.exists('reports'):
         os.makedirs('reports')
     if not os.path.exists('screenshots'):
