@@ -146,7 +146,9 @@ def retrace(tag,dir):
     dirs.pop()
     for childInd in reversed(dirs):
         if tag is not None:
-            tag=tag.findChildren(attrs={'class': str(childInd)},recursive=False)[0]
+            tags=tag.findChildren(attrs={'class': str(childInd)},recursive=False)
+            if len(tags)>0:
+                tag=tags[0]
     return tag
 
 def check_for_changes(Id):
@@ -433,6 +435,7 @@ def save_dynamic():
     global html_code
     id=request.form['id']
     url = service.get_url(id)
+
     if request.method == 'POST':
         html_code=request.form['content_url']
         filename = f"{re.sub('[^a-zA-Z0-9_]', '_', url['URL'])}.html"
@@ -442,7 +445,18 @@ def save_dynamic():
         with open(report_path, 'w') as f:
             f.write(html_code)
     setup_dynamic(url)
-
+    new_content = get_page_content(url['URL'])
+    new_soup = BeautifulSoup(new_content, 'html5lib')
+    bfs_tree(new_soup.find('body'))
+    dynamic_elements = previous_domtree[url['URL']].split('\n')
+    print(dynamic_elements)
+    for ele in dynamic_elements:
+        tag = retrace(new_soup.body, ele)
+        if tag is not None:
+            tag.decompose()
+    new_content = str(new_soup)
+    previous_contents[url['URL']]=new_content
+    previous_hashes[url['URL']]=get_page_hash(new_content)
     return redirect(url_for('edit_url',id=url["Id"]))
 
 
@@ -462,6 +476,9 @@ def save(id):
         new_content = get_page_content(url_literal)
         soup = BeautifulSoup(new_content, 'html5lib')
         new_content = str(soup.find('body'))
+        previous_contents[url_literal]=new_content
+        previous_hashes[url_literal]=get_page_hash(content=new_content)
+        previous_domtree[url_literal]=bfs_tree(soup.find('body'))
         f.write(new_content)
     return redirect(url_for('edit_url',id=url["Id"]))
 
